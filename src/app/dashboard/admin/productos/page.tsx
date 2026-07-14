@@ -63,48 +63,134 @@ interface Producto {
   categoryName: string;
 }
 
+function obtenerListaProductos(response: unknown): Producto[] {
+  if (Array.isArray(response)) {
+    return response as Producto[];
+  }
+
+  if (response && typeof response === "object") {
+    const resultado = response as {
+      data?: Producto[] | { content?: Producto[] };
+      content?: Producto[];
+    };
+
+    if (Array.isArray(resultado.content)) {
+      return resultado.content;
+    }
+
+    if (Array.isArray(resultado.data)) {
+      return resultado.data;
+    }
+
+    if (resultado.data && Array.isArray(resultado.data.content)) {
+      return resultado.data.content;
+    }
+  }
+
+  return [];
+}
+
 export default function AdminProductosPage() {
   const [productos, setProductos] = useState<Producto[]>([]);
 
-const cargarProductos = async () => {
-  try {
-    const response = await api.getProductos();
-    setProductos(response.data);
-  } catch (error) {
-    console.error(error);
-  }
-};
+  const cargarProductos = async () => {
+    try {
+      const response = await api.getProductos();
+      setProductos(obtenerListaProductos(response));
+    } catch (error) {
+      console.error("Error al cargar productos:", error);
 
-useEffect(() => {
-  cargarProductos();
-}, []);
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudieron cargar los productos",
+        text: "Verifica que el backend esté encendido y que la URL de la API sea correcta.",
+      });
+    }
+  };
 
-  const crearProducto = async () => {
+  useEffect(() => {
+    let componenteActivo = true;
+
+    api
+      .getProductos()
+      .then((response) => {
+        if (componenteActivo) {
+          setProductos(obtenerListaProductos(response));
+        }
+      })
+      .catch((error) => {
+        console.error("Error al cargar productos:", error);
+      });
+
+    return () => {
+      componenteActivo = false;
+    };
+  }, []);
+
+  const normalizarTexto = (texto: string) =>
+    texto
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  const crearProductoManual = async (nombreInicial = "") => {
     const { value } = await Swal.fire({
-      title: "Nuevo Producto",
+      title: "Agregar producto manualmente",
       html: `
-        <input id="nombre" class="swal2-input" placeholder="Nombre">
-        <input id="categoria" class="swal2-input" placeholder="Categoría">
-        <input id="precio" class="swal2-input" type="number" placeholder="Precio">
+        <input
+          id="nombre"
+          class="swal2-input"
+          placeholder="Nombre"
+          value="${nombreInicial.replace(/"/g, "&quot;")}"
+        >
+        <input
+          id="categoria"
+          class="swal2-input"
+          placeholder="Categoría"
+        >
+        <input
+          id="precio"
+          class="swal2-input"
+          type="number"
+          min="0.01"
+          step="0.01"
+          placeholder="Precio"
+        >
       `,
       showCancelButton: true,
-      confirmButtonText: "Guardar",
+      confirmButtonText: "Guardar producto",
       cancelButtonText: "Cancelar",
+      focusConfirm: false,
       preConfirm: () => {
         const nombre = (
           document.getElementById("nombre") as HTMLInputElement
-        ).value;
+        ).value.trim();
 
         const categoria = (
           document.getElementById("categoria") as HTMLInputElement
-        ).value;
+        ).value.trim();
 
         const precio = Number(
           (document.getElementById("precio") as HTMLInputElement).value
         );
 
-        if (!nombre || !categoria || !precio) {
-          Swal.showValidationMessage("Completa todos los campos");
+        if (!nombre || !categoria || !precio || precio <= 0) {
+          Swal.showValidationMessage(
+            "Completa todos los campos y escribe un precio mayor a 0."
+          );
+          return false;
+        }
+
+        const yaExiste = productos.some(
+          (producto) =>
+            normalizarTexto(producto.name) === normalizarTexto(nombre)
+        );
+
+        if (yaExiste) {
+          Swal.showValidationMessage(
+            "Ya existe un producto registrado con ese nombre."
+          );
           return false;
         }
 
@@ -116,28 +202,107 @@ useEffect(() => {
       },
     });
 
-    if (value) {
-      try {
-        await api.crearProducto({
-          name: value.nombre,
-          price: value.precio,
-          categoryName: value.categoria,
-        });
+    if (!value) return;
 
-        await cargarProductos();
+    try {
+      await api.crearProducto({
+        name: value.nombre,
+        price: value.precio,
+        categoryName: value.categoria,
+      });
 
-        Swal.fire({
-          icon: "success",
-          title: "Producto creado",
-        });
-      } catch (error) {
-        console.error(error);
+      await cargarProductos();
 
-        Swal.fire({
-          icon: "error",
-          title: "No se pudo crear el producto",
-        });
-      }
+      await Swal.fire({
+        icon: "success",
+        title: "Producto creado",
+        text: `${value.nombre} fue agregado correctamente.`,
+      });
+    } catch (error) {
+      console.error("Error al crear producto:", error);
+
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo crear el producto",
+        text: "Verifica los datos y que el backend esté disponible.",
+      });
+    }
+  };
+
+  const crearProducto = async () => {
+    const { value: textoBusqueda } = await Swal.fire({
+      title: "Buscar producto",
+      text: "Escribe el nombre antes de agregarlo.",
+      input: "text",
+      inputPlaceholder: "Ejemplo: Arroz",
+      showCancelButton: true,
+      confirmButtonText: "Buscar",
+      cancelButtonText: "Cancelar",
+      inputValidator: (value) => {
+        if (!value.trim()) {
+          return "Escribe el nombre del producto.";
+        }
+
+        return undefined;
+      },
+    });
+
+    if (!textoBusqueda) return;
+
+    const termino = normalizarTexto(textoBusqueda);
+
+    const coincidencias = productos.filter((producto) =>
+      normalizarTexto(producto.name).includes(termino)
+    );
+
+    if (coincidencias.length > 0) {
+      const opciones = coincidencias
+        .map(
+          (producto) => `
+            <div
+              style="
+                text-align:left;
+                border:1px solid #e5e7eb;
+                border-radius:8px;
+                padding:10px 12px;
+                margin-bottom:8px;
+              "
+            >
+              <strong>${producto.name}</strong><br>
+              <span style="font-size:13px;color:#6b7280;">
+                ${producto.categoryName} · $${producto.price}
+              </span>
+            </div>
+          `
+        )
+        .join("");
+
+      await Swal.fire({
+        icon: "info",
+        title: "El producto ya existe",
+        html: `
+          <p style="margin-bottom:12px;">
+            Encontramos ${coincidencias.length} coincidencia(s):
+          </p>
+          ${opciones}
+        `,
+        confirmButtonText: "Aceptar",
+      });
+
+      return;
+    }
+
+    const resultado = await Swal.fire({
+      icon: "question",
+      title: "Producto no encontrado",
+      text: `No encontramos "${textoBusqueda}". ¿Deseas agregarlo manualmente?`,
+      showCancelButton: true,
+      confirmButtonText: "Sí, agregar",
+      cancelButtonText: "Cancelar",
+    });
+
+    if (resultado.isConfirmed) {
+      await crearProductoManual(textoBusqueda.trim());
     }
   };
 

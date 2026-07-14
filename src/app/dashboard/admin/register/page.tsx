@@ -1,9 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import { api } from "../../../data/api";
 import Sidebar from "@/components/Sidebar";
+
+type Usuario = {
+  id: string;
+  fullName: string;
+  username: string;
+  email: string;
+};
+
+function obtenerListaUsuarios(response: unknown): Usuario[] {
+  if (Array.isArray(response)) {
+    return response as Usuario[];
+  }
+
+  if (response && typeof response === "object") {
+    const resultado = response as {
+      data?: Usuario[] | { content?: Usuario[] };
+      content?: Usuario[];
+    };
+
+    if (Array.isArray(resultado.content)) {
+      return resultado.content;
+    }
+
+    if (Array.isArray(resultado.data)) {
+      return resultado.data;
+    }
+
+    if (resultado.data && Array.isArray(resultado.data.content)) {
+      return resultado.data.content;
+    }
+  }
+
+  return [];
+}
 
 export default function RegisterPage() {
   const [nombre, setNombre] = useState("");
@@ -11,43 +45,167 @@ export default function RegisterPage() {
   const [correo, setCorreo] = useState("");
   const [password, setPassword] = useState("");
 
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [registrando, setRegistrando] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+
+  const cargarUsuarios = async () => {
+    try {
+      setLoading(true);
+
+      const response = await api.getUsuarios();
+      setUsuarios(obtenerListaUsuarios(response));
+    } catch (error) {
+      console.error("Error al cargar usuarios:", error);
+
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudieron cargar los usuarios",
+        text: "Verifica que el backend esté encendido y que exista el endpoint para listar usuarios.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let componenteActivo = true;
+
+    api
+      .getUsuarios()
+      .then((response) => {
+        if (componenteActivo) {
+          setUsuarios(obtenerListaUsuarios(response));
+        }
+      })
+      .catch((error) => {
+        console.error("Error al cargar usuarios:", error);
+      })
+      .finally(() => {
+        if (componenteActivo) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      componenteActivo = false;
+    };
+  }, []);
+
   const handleRegister = async () => {
-    if (!nombre || !usuario || !correo || !password) {
-      Swal.fire({
+    const nombreLimpio = nombre.trim();
+    const usuarioLimpio = usuario.trim();
+    const correoLimpio = correo.trim().toLowerCase();
+
+    if (!nombreLimpio || !usuarioLimpio || !correoLimpio || !password) {
+      await Swal.fire({
         icon: "warning",
         title: "Campos incompletos",
-        text: "Por favor completa todos los campos",
+        text: "Por favor completa todos los campos.",
+      });
+      return;
+    }
+
+    const correoValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoLimpio);
+
+    if (!correoValido) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Correo no válido",
+        text: "Escribe un correo electrónico válido.",
+      });
+      return;
+    }
+
+    const usuarioDuplicado = usuarios.some(
+      (item) => item.username.toLowerCase() === usuarioLimpio.toLowerCase()
+    );
+
+    if (usuarioDuplicado) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Usuario existente",
+        text: "Ese nombre de usuario ya está registrado.",
+      });
+      return;
+    }
+
+    const correoDuplicado = usuarios.some(
+      (item) => item.email.toLowerCase() === correoLimpio
+    );
+
+    if (correoDuplicado) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Correo existente",
+        text: "Ese correo electrónico ya está registrado.",
       });
       return;
     }
 
     try {
+      setRegistrando(true);
+
       await api.register({
-        fullName: nombre,
-        username: usuario,
-        email: correo,
+        fullName: nombreLimpio,
+        username: usuarioLimpio,
+        email: correoLimpio,
         password,
       });
 
       await Swal.fire({
         icon: "success",
         title: "Usuario creado",
-        text: `${nombre} fue registrado correctamente`,
+        text: `${nombreLimpio} fue registrado correctamente.`,
       });
 
       setNombre("");
       setUsuario("");
       setCorreo("");
       setPassword("");
-    } catch (error) {
-      console.error(error);
 
-      Swal.fire({
+      await cargarUsuarios();
+    } catch (error) {
+      console.error("Error al registrar usuario:", error);
+
+      await Swal.fire({
         icon: "error",
         title: "Error",
-        text: "No fue posible registrar el usuario",
+        text: "No fue posible registrar el usuario.",
       });
+    } finally {
+      setRegistrando(false);
     }
+  };
+
+  const usuariosFiltrados = usuarios.filter((item) => {
+    const texto = busqueda.toLowerCase();
+
+    return (
+      item.fullName?.toLowerCase().includes(texto) ||
+      item.username?.toLowerCase().includes(texto) ||
+      item.email?.toLowerCase().includes(texto)
+    );
+  });
+
+  const inputStyle = {
+    width: "100%",
+    border: "1px solid #d1d5db",
+    borderRadius: "6px",
+    padding: "8px 12px",
+    fontSize: "14px",
+    boxSizing: "border-box" as const,
+    color: "#111827",
+    backgroundColor: "#fff",
+  };
+
+  const labelStyle = {
+    display: "block",
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "#374151",
+    marginBottom: "4px",
   };
 
   return (
@@ -63,164 +221,261 @@ export default function RegisterPage() {
       <main
         style={{
           flex: 1,
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
           padding: "24px",
+          overflowX: "auto",
         }}
       >
         <div
           style={{
             width: "100%",
-            maxWidth: "420px",
-            backgroundColor: "#fff",
-            border: "1px solid #d1d5db",
-            borderRadius: "8px",
-            padding: "32px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+            maxWidth: "1100px",
+            margin: "0 auto",
           }}
         >
-          <h1
+          <div
             style={{
-              fontSize: "18px",
-              fontWeight: 700,
-              color: "#111",
-              borderBottom: "1px solid #e5e7eb",
-              paddingBottom: "12px",
-              marginBottom: "24px",
+              maxWidth: "500px",
+              margin: "0 auto 28px",
+              backgroundColor: "#fff",
+              border: "1px solid #d1d5db",
+              borderRadius: "8px",
+              padding: "32px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
             }}
           >
-            Crear Usuario
-          </h1>
-
-          <div style={{ marginBottom: "16px" }}>
-            <label
+            <h1
               style={{
-                display: "block",
-                fontSize: "13px",
-                fontWeight: 600,
-                color: "#374151",
-                marginBottom: "4px",
+                fontSize: "18px",
+                fontWeight: 700,
+                color: "#111",
+                borderBottom: "1px solid #e5e7eb",
+                paddingBottom: "12px",
+                marginBottom: "24px",
               }}
             >
-              Nombre completo
-            </label>
+              Crear Usuario
+            </h1>
 
-            <input
-              type="text"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
+            <div style={{ marginBottom: "16px" }}>
+              <label style={labelStyle}>Nombre completo</label>
+              <input
+                type="text"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                style={inputStyle}
+                placeholder="Ejemplo: Juan Pérez"
+              />
+            </div>
+
+            <div style={{ marginBottom: "16px" }}>
+              <label style={labelStyle}>Usuario</label>
+              <input
+                type="text"
+                value={usuario}
+                onChange={(e) => setUsuario(e.target.value)}
+                style={inputStyle}
+                placeholder="Ejemplo: juanperez"
+              />
+            </div>
+
+            <div style={{ marginBottom: "16px" }}>
+              <label style={labelStyle}>Correo electrónico</label>
+              <input
+                type="email"
+                value={correo}
+                onChange={(e) => setCorreo(e.target.value)}
+                style={inputStyle}
+                placeholder="Ejemplo: juan@correo.com"
+              />
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <label style={labelStyle}>Contraseña</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={inputStyle}
+                placeholder="Escribe una contraseña"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleRegister}
+              disabled={registrando}
               style={{
                 width: "100%",
-                border: "1px solid #d1d5db",
+                backgroundColor: registrando ? "#6b7280" : "#111",
+                color: "#fff",
+                border: "none",
                 borderRadius: "6px",
-                padding: "8px 12px",
+                padding: "10px",
                 fontSize: "14px",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: "16px" }}>
-            <label
-              style={{
-                display: "block",
-                fontSize: "13px",
                 fontWeight: 600,
-                color: "#374151",
-                marginBottom: "4px",
+                cursor: registrando ? "not-allowed" : "pointer",
               }}
             >
-              Usuario
-            </label>
-
-            <input
-              type="text"
-              value={usuario}
-              onChange={(e) => setUsuario(e.target.value)}
-              style={{
-                width: "100%",
-                border: "1px solid #d1d5db",
-                borderRadius: "6px",
-                padding: "8px 12px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-              }}
-            />
+              {registrando ? "Registrando..." : "Registrar Usuario"}
+            </button>
           </div>
 
-          <div style={{ marginBottom: "16px" }}>
-            <label
-              style={{
-                display: "block",
-                fontSize: "13px",
-                fontWeight: 600,
-                color: "#374151",
-                marginBottom: "4px",
-              }}
-            >
-              Correo electrónico
-            </label>
-
-            <input
-              type="email"
-              value={correo}
-              onChange={(e) => setCorreo(e.target.value)}
-              style={{
-                width: "100%",
-                border: "1px solid #d1d5db",
-                borderRadius: "6px",
-                padding: "8px 12px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: "20px" }}>
-            <label
-              style={{
-                display: "block",
-                fontSize: "13px",
-                fontWeight: 600,
-                color: "#374151",
-                marginBottom: "4px",
-              }}
-            >
-              Contraseña
-            </label>
-
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{
-                width: "100%",
-                border: "1px solid #d1d5db",
-                borderRadius: "6px",
-                padding: "8px 12px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-
-          <button
-            onClick={handleRegister}
+          <div
             style={{
-              width: "100%",
-              backgroundColor: "#111",
-              color: "#fff",
-              border: "none",
-              borderRadius: "6px",
-              padding: "10px",
-              fontSize: "14px",
-              fontWeight: 600,
-              cursor: "pointer",
+              backgroundColor: "#fff",
+              border: "1px solid #d1d5db",
+              borderRadius: "8px",
+              padding: "24px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
             }}
           >
-            Registrar Usuario
-          </button>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "16px",
+                marginBottom: "20px",
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: "18px",
+                    color: "#111827",
+                  }}
+                >
+                  Usuarios registrados
+                </h2>
+
+                <p
+                  style={{
+                    margin: "4px 0 0",
+                    color: "#6b7280",
+                    fontSize: "13px",
+                  }}
+                >
+                  Total: {usuarios.length}
+                </p>
+              </div>
+
+              <input
+                type="text"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar usuario..."
+                style={{
+                  ...inputStyle,
+                  width: "280px",
+                  maxWidth: "100%",
+                }}
+              />
+            </div>
+
+            <div style={{ overflowX: "auto" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  fontSize: "14px",
+                  minWidth: "650px",
+                }}
+              >
+                <thead>
+                  <tr
+                    style={{
+                      backgroundColor: "#f9fafb",
+                      borderBottom: "1px solid #e5e7eb",
+                    }}
+                  >
+                    {["Nombre", "Usuario", "Correo"].map((encabezado) => (
+                      <th
+                        key={encabezado}
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          fontSize: "12px",
+                          textTransform: "uppercase",
+                          color: "#6b7280",
+                        }}
+                      >
+                        {encabezado}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={3}
+                        style={{
+                          padding: "24px",
+                          textAlign: "center",
+                          color: "#6b7280",
+                        }}
+                      >
+                        Cargando usuarios...
+                      </td>
+                    </tr>
+                  ) : usuariosFiltrados.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={3}
+                        style={{
+                          padding: "24px",
+                          textAlign: "center",
+                          color: "#6b7280",
+                        }}
+                      >
+                        No se encontraron usuarios.
+                      </td>
+                    </tr>
+                  ) : (
+                    usuariosFiltrados.map((item) => (
+                      <tr
+                        key={item.id || item.email}
+                        style={{
+                          borderBottom: "1px solid #f3f4f6",
+                        }}
+                      >
+                        <td
+                          style={{
+                            padding: "12px",
+                            color: "#111827",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {item.fullName}
+                        </td>
+
+                        <td
+                          style={{
+                            padding: "12px",
+                            color: "#374151",
+                          }}
+                        >
+                          {item.username}
+                        </td>
+
+                        <td
+                          style={{
+                            padding: "12px",
+                            color: "#2563eb",
+                          }}
+                        >
+                          {item.email}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </main>
     </div>

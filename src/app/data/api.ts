@@ -97,5 +97,5 @@ method: "POST",
 body: JSON.stringify(data),
 }),
 
-getUsuarios: () => apiRequest("/auth/users"),
+getUsuarios: () => apiRequest("/users"),
 };
