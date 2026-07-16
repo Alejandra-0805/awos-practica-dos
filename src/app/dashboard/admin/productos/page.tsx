@@ -229,18 +229,237 @@ export default function AdminProductosPage() {
     }
   };
 
+  type ProductoExterno = {
+    id: string;
+    name: string;
+    categoryName: string;
+    price?: number;
+  };
+
+  const obtenerProductosExternos = (response: unknown): ProductoExterno[] => {
+    let lista: unknown[] = [];
+
+    if (Array.isArray(response)) {
+      lista = response;
+    } else if (response && typeof response === "object") {
+      const resultado = response as {
+        data?: unknown[] | { products?: unknown[]; content?: unknown[] };
+        products?: unknown[];
+        content?: unknown[];
+        items?: unknown[];
+      };
+
+      if (Array.isArray(resultado.products)) {
+        lista = resultado.products;
+      } else if (Array.isArray(resultado.content)) {
+        lista = resultado.content;
+      } else if (Array.isArray(resultado.items)) {
+        lista = resultado.items;
+      } else if (Array.isArray(resultado.data)) {
+        lista = resultado.data;
+      } else if (
+        resultado.data &&
+        typeof resultado.data === "object" &&
+        Array.isArray(resultado.data.products)
+      ) {
+        lista = resultado.data.products;
+      } else if (
+        resultado.data &&
+        typeof resultado.data === "object" &&
+        Array.isArray(resultado.data.content)
+      ) {
+        lista = resultado.data.content;
+      }
+    }
+
+    return lista
+      .map((item, index) => {
+        const producto = item as Record<string, unknown>;
+
+        const name = String(
+          producto.name ??
+            producto.title ??
+            producto.product_name ??
+            producto.productName ??
+            ""
+        ).trim();
+
+        const categoryName = String(
+          producto.categoryName ??
+            producto.category ??
+            producto.category_name ??
+            "General"
+        ).trim();
+
+        const rawPrice =
+          producto.price ??
+          producto.current_price ??
+          producto.salePrice ??
+          producto.cost;
+
+        const parsedPrice =
+          typeof rawPrice === "number"
+            ? rawPrice
+            : Number.parseFloat(String(rawPrice ?? ""));
+
+        return {
+          id: String(
+            producto.id ??
+              producto.code ??
+              producto.barcode ??
+              producto._id ??
+              index
+          ),
+          name,
+          categoryName: categoryName || "General",
+          price:
+            Number.isFinite(parsedPrice) && parsedPrice > 0
+              ? parsedPrice
+              : undefined,
+        };
+      })
+      .filter((producto) => producto.name);
+  };
+
+  const escaparHtml = (texto: string) =>
+    texto
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+  const guardarProductoExterno = async (producto: ProductoExterno) => {
+    const { value } = await Swal.fire({
+      title: "Agregar producto encontrado",
+      html: `
+        <p style="font-size:13px;color:#6b7280;margin-bottom:12px;">
+          Revisa los datos antes de guardarlos en tu catálogo.
+        </p>
+
+        <input
+          id="nombre-externo"
+          class="swal2-input"
+          placeholder="Nombre"
+          value="${escaparHtml(producto.name)}"
+        >
+
+        <input
+          id="categoria-externa"
+          class="swal2-input"
+          placeholder="Categoría"
+          value="${escaparHtml(producto.categoryName)}"
+        >
+
+        <input
+          id="precio-externo"
+          class="swal2-input"
+          type="number"
+          min="0.01"
+          step="0.01"
+          placeholder="Precio"
+          value="${producto.price ?? ""}"
+        >
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Guardar producto",
+      cancelButtonText: "Cancelar",
+      focusConfirm: false,
+      preConfirm: () => {
+        const nombre = (
+          document.getElementById("nombre-externo") as HTMLInputElement
+        ).value.trim();
+
+        const categoria = (
+          document.getElementById("categoria-externa") as HTMLInputElement
+        ).value.trim();
+
+        const precio = Number(
+          (
+            document.getElementById(
+              "precio-externo"
+            ) as HTMLInputElement
+          ).value
+        );
+
+        if (!nombre || !categoria || !precio || precio <= 0) {
+          Swal.showValidationMessage(
+            "Completa todos los campos y escribe un precio mayor a 0."
+          );
+          return false;
+        }
+
+        const yaExiste = productos.some(
+          (item) =>
+            normalizarTexto(item.name) === normalizarTexto(nombre)
+        );
+
+        if (yaExiste) {
+          Swal.showValidationMessage(
+            "Este producto ya existe en tu catálogo."
+          );
+          return false;
+        }
+
+        return { nombre, categoria, precio };
+      },
+    });
+
+    if (!value) return;
+
+    try {
+      await api.crearProducto({
+        name: value.nombre,
+        price: value.precio,
+        categoryName: value.categoria,
+      });
+
+      await cargarProductos();
+
+      await Swal.fire({
+        icon: "success",
+        title: "Producto agregado",
+        text: `${value.nombre} fue agregado a tu catálogo.`,
+      });
+    } catch (error) {
+      console.error("Error al guardar producto externo:", error);
+
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo guardar",
+        text: "La búsqueda funcionó, pero no se pudo guardar el producto en tu catálogo.",
+      });
+    }
+  };
+
   const crearProducto = async () => {
     const { value: textoBusqueda } = await Swal.fire({
-      title: "Buscar producto",
-      text: "Escribe el nombre antes de agregarlo.",
+      title: "Buscar producto en la API externa",
+      html: `
+        <p style="font-size:14px;color:#374151;margin:0 0 8px;">
+          Busca el producto antes de agregarlo.
+        </p>
+        <p style="
+          font-size:13px;
+          color:#92400e;
+          background:#fef3c7;
+          border:1px solid #fde68a;
+          border-radius:6px;
+          padding:8px 10px;
+          margin:0;
+        ">
+          Nota: escribe el nombre del producto en inglés.
+          Ejemplos: milk, rice, tuna, detergent.
+        </p>
+      `,
       input: "text",
-      inputPlaceholder: "Ejemplo: Arroz",
+      inputPlaceholder: "Example: milk",
       showCancelButton: true,
       confirmButtonText: "Buscar",
       cancelButtonText: "Cancelar",
       inputValidator: (value) => {
         if (!value.trim()) {
-          return "Escribe el nombre del producto.";
+          return "Escribe el nombre del producto en inglés.";
         }
 
         return undefined;
@@ -249,60 +468,112 @@ export default function AdminProductosPage() {
 
     if (!textoBusqueda) return;
 
-    const termino = normalizarTexto(textoBusqueda);
+    const busqueda = textoBusqueda.trim();
 
-    const coincidencias = productos.filter((producto) =>
-      normalizarTexto(producto.name).includes(termino)
-    );
-
-    if (coincidencias.length > 0) {
-      const opciones = coincidencias
-        .map(
-          (producto) => `
-            <div
-              style="
-                text-align:left;
-                border:1px solid #e5e7eb;
-                border-radius:8px;
-                padding:10px 12px;
-                margin-bottom:8px;
-              "
-            >
-              <strong>${producto.name}</strong><br>
-              <span style="font-size:13px;color:#6b7280;">
-                ${producto.categoryName} · $${producto.price}
-              </span>
-            </div>
-          `
-        )
-        .join("");
-
-      await Swal.fire({
-        icon: "info",
-        title: "El producto ya existe",
-        html: `
-          <p style="margin-bottom:12px;">
-            Encontramos ${coincidencias.length} coincidencia(s):
-          </p>
-          ${opciones}
-        `,
-        confirmButtonText: "Aceptar",
-      });
-
-      return;
-    }
-
-    const resultado = await Swal.fire({
-      icon: "question",
-      title: "Producto no encontrado",
-      text: `No encontramos "${textoBusqueda}". ¿Deseas agregarlo manualmente?`,
-      showCancelButton: true,
-      confirmButtonText: "Sí, agregar",
-      cancelButtonText: "Cancelar",
+    Swal.fire({
+      title: "Buscando...",
+      text: `Consultando productos para "${busqueda}".`,
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
     });
 
-    if (resultado.isConfirmed) {
-      await crearProductoManual(textoBusqueda.trim());
+    try {
+      const response = await api.buscarProductosExternos(busqueda);
+      const externos = obtenerProductosExternos(response);
+
+      Swal.close();
+
+      if (externos.length === 0) {
+        const resultado = await Swal.fire({
+          icon: "question",
+          title: "Producto no encontrado",
+          html: `
+            <p>No se encontraron resultados para
+              <strong>${escaparHtml(busqueda)}</strong>.
+            </p>
+            <p style="font-size:13px;color:#6b7280;">
+              Puedes intentarlo nuevamente en inglés o agregarlo manualmente.
+            </p>
+          `,
+          showCancelButton: true,
+          confirmButtonText: "Agregar manualmente",
+          cancelButtonText: "Cancelar",
+        });
+
+        if (resultado.isConfirmed) {
+          await crearProductoManual(busqueda);
+        }
+
+        return;
+      }
+
+      const opciones = externos.slice(0, 10).reduce<Record<string, string>>(
+        (acc, producto, index) => {
+          acc[String(index)] = `${producto.name} — ${producto.categoryName}`;
+          return acc;
+        },
+        {}
+      );
+
+      const { value: indiceSeleccionado } = await Swal.fire({
+        title: "Selecciona un producto",
+        html: `
+          <p style="font-size:13px;color:#6b7280;">
+            Resultados de la API externa. Los nombres pueden aparecer en inglés.
+          </p>
+        `,
+        input: "select",
+        inputOptions: opciones,
+        inputPlaceholder: "Selecciona un resultado",
+        showCancelButton: true,
+        confirmButtonText: "Usar producto",
+        cancelButtonText: "Cancelar",
+        inputValidator: (value) => {
+          if (value === "") {
+            return "Selecciona un producto.";
+          }
+
+          return undefined;
+        },
+      });
+
+      if (indiceSeleccionado === undefined) return;
+
+      const seleccionado = externos[Number(indiceSeleccionado)];
+
+      if (!seleccionado) {
+        await Swal.fire({
+          icon: "error",
+          title: "Selección no válida",
+          text: "No se pudo leer el producto seleccionado.",
+        });
+        return;
+      }
+
+      await guardarProductoExterno(seleccionado);
+    } catch (error) {
+      Swal.close();
+      console.error("Error al buscar productos externos:", error);
+
+      const resultado = await Swal.fire({
+        icon: "error",
+        title: "No se pudo consultar la API externa",
+        html: `
+          <p>Revisa tu conexión, el token y el endpoint externo.</p>
+          <p style="font-size:13px;color:#6b7280;">
+            También puedes agregar el producto manualmente.
+          </p>
+        `,
+        showCancelButton: true,
+        confirmButtonText: "Agregar manualmente",
+        cancelButtonText: "Cancelar",
+      });
+
+      if (resultado.isConfirmed) {
+        await crearProductoManual(busqueda);
+      }
     }
   };
 

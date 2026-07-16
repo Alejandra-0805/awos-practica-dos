@@ -67,7 +67,7 @@ export default function Sidebar({
             margin: 0,
           }}
         >
-          Juan Pérez
+          Usuario
         </p>
 
         <span

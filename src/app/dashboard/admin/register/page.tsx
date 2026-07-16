@@ -23,17 +23,10 @@ function obtenerListaUsuarios(response: unknown): Usuario[] {
       content?: Usuario[];
     };
 
-    if (Array.isArray(resultado.content)) {
-      return resultado.content;
-    }
-
-    if (Array.isArray(resultado.data)) {
-      return resultado.data;
-    }
-
-    if (resultado.data && Array.isArray(resultado.data.content)) {
+    if (Array.isArray(resultado.content)) return resultado.content;
+    if (Array.isArray(resultado.data)) return resultado.data;
+    if (resultado.data && Array.isArray(resultado.data.content))
       return resultado.data.content;
-    }
   }
 
   return [];
@@ -52,20 +45,10 @@ export default function RegisterPage() {
 
   const cargarUsuarios = async () => {
     try {
-      setLoading(true);
-
       const response = await api.getUsuarios();
       setUsuarios(obtenerListaUsuarios(response));
     } catch (error) {
       console.error("Error al cargar usuarios:", error);
-
-      await Swal.fire({
-        icon: "error",
-        title: "No se pudieron cargar los usuarios",
-        text: "Verifica que el backend esté encendido y que exista el endpoint para listar usuarios.",
-      });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -108,7 +91,6 @@ export default function RegisterPage() {
     }
 
     const correoValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoLimpio);
-
     if (!correoValido) {
       await Swal.fire({
         icon: "warning",
@@ -118,10 +100,18 @@ export default function RegisterPage() {
       return;
     }
 
+    if (password.length < 8) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Contraseña muy corta",
+        text: "La contraseña debe tener al menos 8 caracteres.",
+      });
+      return;
+    }
+
     const usuarioDuplicado = usuarios.some(
       (item) => item.username.toLowerCase() === usuarioLimpio.toLowerCase()
     );
-
     if (usuarioDuplicado) {
       await Swal.fire({
         icon: "warning",
@@ -134,7 +124,6 @@ export default function RegisterPage() {
     const correoDuplicado = usuarios.some(
       (item) => item.email.toLowerCase() === correoLimpio
     );
-
     if (correoDuplicado) {
       await Swal.fire({
         icon: "warning",
@@ -169,10 +158,15 @@ export default function RegisterPage() {
     } catch (error) {
       console.error("Error al registrar usuario:", error);
 
+      const mensaje =
+        error instanceof Error && error.message.includes("400")
+          ? "Verifica que la contraseña tenga al menos 8 caracteres y que todos los datos sean válidos."
+          : "No fue posible registrar el usuario.";
+
       await Swal.fire({
         icon: "error",
-        title: "Error",
-        text: "No fue posible registrar el usuario.",
+        title: "Error al registrar",
+        text: mensaje,
       });
     } finally {
       setRegistrando(false);
@@ -181,7 +175,6 @@ export default function RegisterPage() {
 
   const usuariosFiltrados = usuarios.filter((item) => {
     const texto = busqueda.toLowerCase();
-
     return (
       item.fullName?.toLowerCase().includes(texto) ||
       item.username?.toLowerCase().includes(texto) ||
@@ -189,9 +182,12 @@ export default function RegisterPage() {
     );
   });
 
+
   const inputStyle = {
     width: "100%",
-    border: "1px solid #d1d5db",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: "#d1d5db",
     borderRadius: "6px",
     padding: "8px 12px",
     fontSize: "14px",
@@ -208,30 +204,15 @@ export default function RegisterPage() {
     marginBottom: "4px",
   };
 
+
   return (
-    <div
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        backgroundColor: "#f3f4f6",
-      }}
-    >
+    <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "#f3f4f6" }}>
       <Sidebar active="Usuarios" role="admin" />
 
-      <main
-        style={{
-          flex: 1,
-          padding: "24px",
-          overflowX: "auto",
-        }}
-      >
-        <div
-          style={{
-            width: "100%",
-            maxWidth: "1100px",
-            margin: "0 auto",
-          }}
-        >
+      <main style={{ flex: 1, padding: "24px", overflowX: "auto" }}>
+        <div style={{ width: "100%", maxWidth: "1100px", margin: "0 auto" }}>
+
+          {/* ── Formulario de creación ── */}
           <div
             style={{
               maxWidth: "500px",
@@ -289,16 +270,43 @@ export default function RegisterPage() {
               />
             </div>
 
-            <div style={{ marginBottom: "20px" }}>
+            <div style={{ marginBottom: "4px" }}>
               <label style={labelStyle}>Contraseña</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                style={inputStyle}
-                placeholder="Escribe una contraseña"
+                style={{
+                  ...inputStyle,
+                  borderColor:
+                    password.length > 0 && password.length < 8
+                      ? "#ef4444"
+                      : "#d1d5db",
+                }}
+                placeholder="Mínimo 8 caracteres"
               />
             </div>
+
+            {/* Indicador de longitud */}
+            <p
+              style={{
+                fontSize: "12px",
+                marginBottom: "20px",
+                marginTop: "4px",
+                color:
+                  password.length === 0
+                    ? "#9ca3af"
+                    : password.length < 8
+                    ? "#ef4444"
+                    : "#16a34a",
+              }}
+            >
+              {password.length === 0
+                ? "La contraseña debe tener al menos 8 caracteres."
+                : password.length < 8
+                ? `Faltan ${8 - password.length} caracteres.`
+                : "✓ Contraseña válida."}
+            </p>
 
             <button
               type="button"
@@ -320,6 +328,7 @@ export default function RegisterPage() {
             </button>
           </div>
 
+          {/* ── Tabla de usuarios ── */}
           <div
             style={{
               backgroundColor: "#fff",
@@ -340,23 +349,10 @@ export default function RegisterPage() {
               }}
             >
               <div>
-                <h2
-                  style={{
-                    margin: 0,
-                    fontSize: "18px",
-                    color: "#111827",
-                  }}
-                >
+                <h2 style={{ margin: 0, fontSize: "18px", color: "#111827" }}>
                   Usuarios registrados
                 </h2>
-
-                <p
-                  style={{
-                    margin: "4px 0 0",
-                    color: "#6b7280",
-                    fontSize: "13px",
-                  }}
-                >
+                <p style={{ margin: "4px 0 0", color: "#6b7280", fontSize: "13px" }}>
                   Total: {usuarios.length}
                 </p>
               </div>
@@ -366,11 +362,7 @@ export default function RegisterPage() {
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 placeholder="Buscar usuario..."
-                style={{
-                  ...inputStyle,
-                  width: "280px",
-                  maxWidth: "100%",
-                }}
+                style={{ ...inputStyle, width: "280px", maxWidth: "100%" }}
               />
             </div>
 
@@ -390,7 +382,7 @@ export default function RegisterPage() {
                       borderBottom: "1px solid #e5e7eb",
                     }}
                   >
-                    {["Nombre", "Usuario", "Correo"].map((encabezado) => (
+                    {["Usuario", "Correo"].map((encabezado) => (
                       <th
                         key={encabezado}
                         style={{
@@ -412,11 +404,7 @@ export default function RegisterPage() {
                     <tr>
                       <td
                         colSpan={3}
-                        style={{
-                          padding: "24px",
-                          textAlign: "center",
-                          color: "#6b7280",
-                        }}
+                        style={{ padding: "24px", textAlign: "center", color: "#6b7280" }}
                       >
                         Cargando usuarios...
                       </td>
@@ -425,11 +413,7 @@ export default function RegisterPage() {
                     <tr>
                       <td
                         colSpan={3}
-                        style={{
-                          padding: "24px",
-                          textAlign: "center",
-                          color: "#6b7280",
-                        }}
+                        style={{ padding: "24px", textAlign: "center", color: "#6b7280" }}
                       >
                         No se encontraron usuarios.
                       </td>
@@ -438,35 +422,12 @@ export default function RegisterPage() {
                     usuariosFiltrados.map((item) => (
                       <tr
                         key={item.id || item.email}
-                        style={{
-                          borderBottom: "1px solid #f3f4f6",
-                        }}
+                        style={{ borderBottom: "1px solid #f3f4f6" }}
                       >
-                        <td
-                          style={{
-                            padding: "12px",
-                            color: "#111827",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {item.fullName}
-                        </td>
-
-                        <td
-                          style={{
-                            padding: "12px",
-                            color: "#374151",
-                          }}
-                        >
+                        <td style={{ padding: "12px", color: "#374151" }}>
                           {item.username}
                         </td>
-
-                        <td
-                          style={{
-                            padding: "12px",
-                            color: "#2563eb",
-                          }}
-                        >
+                        <td style={{ padding: "12px", color: "#2563eb" }}>
                           {item.email}
                         </td>
                       </tr>
@@ -476,6 +437,7 @@ export default function RegisterPage() {
               </table>
             </div>
           </div>
+
         </div>
       </main>
     </div>
