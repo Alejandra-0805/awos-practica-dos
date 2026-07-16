@@ -100,11 +100,11 @@ export default function RegisterPage() {
       return;
     }
 
-    if (password.length < 8) {
+    if (password.length < 6) {
       await Swal.fire({
         icon: "warning",
         title: "Contraseña muy corta",
-        text: "La contraseña debe tener al menos 8 caracteres.",
+        text: "La contraseña debe tener al menos 6 caracteres.",
       });
       return;
     }
@@ -160,7 +160,7 @@ export default function RegisterPage() {
 
       const mensaje =
         error instanceof Error && error.message.includes("400")
-          ? "Verifica que la contraseña tenga al menos 8 caracteres y que todos los datos sean válidos."
+          ? "Verifica que la contraseña tenga al menos 6 caracteres y que todos los datos sean válidos."
           : "No fue posible registrar el usuario.";
 
       await Swal.fire({
@@ -279,11 +279,11 @@ export default function RegisterPage() {
                 style={{
                   ...inputStyle,
                   borderColor:
-                    password.length > 0 && password.length < 8
+                    password.length > 0 && password.length < 6
                       ? "#ef4444"
                       : "#d1d5db",
                 }}
-                placeholder="Mínimo 8 caracteres"
+                placeholder="Mínimo 6 caracteres"
               />
             </div>
 
@@ -296,15 +296,15 @@ export default function RegisterPage() {
                 color:
                   password.length === 0
                     ? "#9ca3af"
-                    : password.length < 8
+                    : password.length < 6
                     ? "#ef4444"
                     : "#16a34a",
               }}
             >
               {password.length === 0
-                ? "La contraseña debe tener al menos 8 caracteres."
-                : password.length < 8
-                ? `Faltan ${8 - password.length} caracteres.`
+                ? "La contraseña debe tener al menos 6 caracteres."
+                : password.length < 6
+                ? `Faltan ${6 - password.length} caracteres.`
                 : "✓ Contraseña válida."}
             </p>
 
