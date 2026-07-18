@@ -7,7 +7,7 @@ import Sidebar from "@/components/Sidebar";
 
 type Usuario = {
   id: string;
-  fullName: string;
+  name: string;
   username: string;
   email: string;
 };
@@ -136,8 +136,9 @@ export default function RegisterPage() {
     try {
       setRegistrando(true);
 
+      // El backend espera "name", no "fullName".
       await api.register({
-        fullName: nombreLimpio,
+        name: nombreLimpio,
         username: usuarioLimpio,
         email: correoLimpio,
         password,
@@ -158,9 +159,11 @@ export default function RegisterPage() {
     } catch (error) {
       console.error("Error al registrar usuario:", error);
 
+      // Ahora api.ts propaga el mensaje real del backend
+      // (ej: "El nombre es obligatorio.", "Contraseña muy corta.", etc.)
       const mensaje =
-        error instanceof Error && error.message.includes("400")
-          ? "Verifica que la contraseña tenga al menos 6 caracteres y que todos los datos sean válidos."
+        error instanceof Error
+          ? error.message
           : "No fue posible registrar el usuario.";
 
       await Swal.fire({
@@ -176,7 +179,7 @@ export default function RegisterPage() {
   const usuariosFiltrados = usuarios.filter((item) => {
     const texto = busqueda.toLowerCase();
     return (
-      item.fullName?.toLowerCase().includes(texto) ||
+      item.name?.toLowerCase().includes(texto) ||
       item.username?.toLowerCase().includes(texto) ||
       item.email?.toLowerCase().includes(texto)
     );
@@ -382,7 +385,7 @@ export default function RegisterPage() {
                       borderBottom: "1px solid #e5e7eb",
                     }}
                   >
-                    {["Usuario", "Correo"].map((encabezado) => (
+                    {["Nombre", "Usuario", "Correo"].map((encabezado) => (
                       <th
                         key={encabezado}
                         style={{
@@ -424,6 +427,9 @@ export default function RegisterPage() {
                         key={item.id || item.email}
                         style={{ borderBottom: "1px solid #f3f4f6" }}
                       >
+                        <td style={{ padding: "12px", color: "#111827", fontWeight: 600 }}>
+                          {item.name}
+                        </td>
                         <td style={{ padding: "12px", color: "#374151" }}>
                           {item.username}
                         </td>

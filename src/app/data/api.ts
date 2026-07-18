@@ -50,7 +50,21 @@ export const apiRequest = async (
   }
 
   if (!response.ok) {
-    throw new Error(`Error ${response.status}`);
+    // El backend responde { code, message, details }. `details` trae los
+    // errores por campo (ej: { name: "El nombre es obligatorio." }).
+    // Antes esto se perdía y solo veías "Error 400" sin saber por qué.
+    let mensaje = `Error ${response.status}`;
+    try {
+      const body = await response.json();
+      if (body?.details && typeof body.details === "object") {
+        mensaje = Object.values(body.details).join(" ");
+      } else if (body?.message) {
+        mensaje = body.message;
+      }
+    } catch {
+      // sin cuerpo JSON, nos quedamos con el mensaje genérico
+    }
+    throw new Error(mensaje);
   }
 
   // DELETE suele responder 204 sin body
@@ -78,7 +92,7 @@ export const api = {
   },
 
   register: async (data: {
-    fullName: string;
+    name: string;
     username: string;
     email: string;
     password: string;
