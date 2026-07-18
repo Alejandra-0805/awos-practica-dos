@@ -1,13 +1,24 @@
+"use client";
+import { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 
-const campos = [
-  { label: "Nombre", value: "Juan Pérez" },
-  { label: "Usuario", value: "usuario1" },
-  { label: "Correo", value: "juan@email.com" },
-  { label: "Rol", value: "Cliente" },
-];
-
 export default function PerfilPage() {
+  const [user, setUser] = useState<any>({});
+
+  useEffect(() => {
+    const stored = localStorage.getItem("user");
+    if (stored) {
+      setUser(JSON.parse(stored));
+    }
+  }, []);
+
+  const campos = [
+    { label: "Nombre", value: user.fullName || "Cargando..." },
+    { label: "Usuario", value: user.username || "Cargando..." },
+    { label: "Correo", value: user.email || "Cargando..." },
+    { label: "Rol", value: "Cliente" },
+  ];
+
   return (
     <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "#f9fafb" }}>
       <Sidebar active="Perfil" role="cliente" />

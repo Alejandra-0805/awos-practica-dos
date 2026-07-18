@@ -1,7 +1,5 @@
 const BASE_URL = "https://awos-two-production.up.railway.app/api/v1";
 
-// ─── Token helpers ────────────────────────────────────────────────────────────
-
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("token");
@@ -18,14 +16,11 @@ function clearToken(): void {
   localStorage.removeItem("user");
 }
 
-// ─── Core request ─────────────────────────────────────────────────────────────
-
 export const apiRequest = async (
   endpoint: string,
   options: RequestInit = {}
 ) => {
   const token = getToken();
-
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string> || {}),
@@ -40,19 +35,15 @@ export const apiRequest = async (
     headers,
   });
 
-  // Token expirado o inválido → limpiar sesión y redirigir al login
   if (response.status === 401) {
     clearToken();
     if (typeof window !== "undefined") {
-      window.location.href = "/login";
+      window.location.href = "/"; 
     }
     throw new Error("Sesión expirada. Inicia sesión de nuevo.");
   }
 
-  if (!response.ok) {
-    // El backend responde { code, message, details }. `details` trae los
-    // errores por campo (ej: { name: "El nombre es obligatorio." }).
-    // Antes esto se perdía y solo veías "Error 400" sin saber por qué.
+  if (!response.ok) {|
     let mensaje = `Error ${response.status}`;
     try {
       const body = await response.json();
@@ -62,18 +53,13 @@ export const apiRequest = async (
         mensaje = body.message;
       }
     } catch {
-      // sin cuerpo JSON, nos quedamos con el mensaje genérico
     }
     throw new Error(mensaje);
   }
 
-  // DELETE suele responder 204 sin body
   if (response.status === 204) return null;
-
   return response.json();
 };
-
-// ─── API ──────────────────────────────────────────────────────────────────────
 
 export const api = {
   // Auth
@@ -82,15 +68,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     });
+
     if (res?.token) {
       saveToken(res.token);
-      if (res.user) {
-        localStorage.setItem("user", JSON.stringify(res.user));
-      }
+      const userData = {
+        id: res.id,
+        fullName: res.name,
+        username: res.username,
+        email: res.email,
+        role: res.role,
+      };
+      localStorage.setItem("user", JSON.stringify(userData));
+      res.user = userData; 
     }
     return res;
   },
-
   register: async (data: {
     name: string;
     username: string;
@@ -101,118 +93,63 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     });
-    // Si el backend devuelve token al registrar, lo guardamos también
     if (res?.token) {
       saveToken(res.token);
     }
     return res;
   },
-
   logout: () => {
     clearToken();
     if (typeof window !== "undefined") {
-      window.location.href = "/login";
+      window.location.href = "/";
     }
   },
-
   isAuthenticated: () => !!getToken(),
 
-  // Categorías (requieren token)
+  // Categorías
   getCategorias: () => apiRequest("/categories"),
-
   crearCategoria: (data: unknown) =>
-    apiRequest("/categories", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-
+    apiRequest("/categories", { method: "POST", body: JSON.stringify(data) }),
   actualizarCategoria: (id: string, data: unknown) =>
-    apiRequest(`/categories/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-
+    apiRequest(`/categories/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   eliminarCategoria: (id: string) =>
-    apiRequest(`/categories/${id}`, {
-      method: "DELETE",
-    }),
+    apiRequest(`/categories/${id}`, { method: "DELETE" }),
 
   // Proveedores
   getProveedores: () => apiRequest("/suppliers"),
-
   getProveedor: (id: string) => apiRequest(`/suppliers/${id}`),
-
   crearProveedor: (data: unknown) =>
-    apiRequest("/suppliers", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-
+    apiRequest("/suppliers", { method: "POST", body: JSON.stringify(data) }),
   actualizarProveedor: (id: string, data: unknown) =>
-    apiRequest(`/suppliers/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    }),
-
+    apiRequest(`/suppliers/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   eliminarProveedor: (id: string) =>
-    apiRequest(`/suppliers/${id}`, {
-      method: "DELETE",
-    }),
+    apiRequest(`/suppliers/${id}`, { method: "DELETE" }),
 
   // Productos
   getProductos: () => apiRequest("/products"),
-
   getProducto: (id: string) => apiRequest(`/products/${id}`),
-
   buscarProductosExternos: (search: string) =>
     apiRequest(`/products/external?search=${encodeURIComponent(search)}`),
-
   crearProducto: (data: unknown) =>
-    apiRequest("/products", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-
+    apiRequest("/products", { method: "POST", body: JSON.stringify(data) }),
   actualizarProducto: (id: string, data: unknown) =>
-    apiRequest(`/products/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-
+    apiRequest(`/products/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   eliminarProducto: (id: string) =>
-    apiRequest(`/products/${id}`, {
-      method: "DELETE",
-    }),
+    apiRequest(`/products/${id}`, { method: "DELETE" }),
 
-  // Usuarios (requieren token)
+  // Usuarios
   getUsuarios: () => apiRequest("/users"),
-
   getUsuario: (id: string) => apiRequest(`/users/${id}`),
-
   actualizarUsuario: (id: string, data: unknown) =>
-    apiRequest(`/users/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    }),
-
+    apiRequest(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   eliminarUsuario: (id: string) =>
-    apiRequest(`/users/${id}`, {
-      method: "DELETE",
-    }),
+    apiRequest(`/users/${id}`, { method: "DELETE" }),
 
   // Compras
   getCompras: () => apiRequest("/purchase"),
-
   getCompra: (id: string) => apiRequest(`/purchase/${id}`),
-
   crearCompra: (data: unknown) =>
-    apiRequest("/purchase", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-
+    apiRequest("/purchase", { method: "POST", body: JSON.stringify(data) }),
   eliminarCompra: (id: string) =>
-    apiRequest(`/purchase/${id}`, {
-      method: "DELETE",
-    }),
+    apiRequest(`/purchase/${id}`, { method: "DELETE" }),
 };

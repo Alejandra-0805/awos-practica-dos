@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import { api } from "../../data/api";
@@ -20,7 +19,6 @@ function stockStyle(s: number) {
     fontSize: "12px",
     fontWeight: 600,
   };
-
   if (s === 0) return { ...baseStyle, backgroundColor: "#fee2e2", color: "#b91c1c" };
   if (s <= 20) return { ...baseStyle, backgroundColor: "#ffedd5", color: "#c2410c" };
   return { ...baseStyle, backgroundColor: "#dcfce7", color: "#15803d" };
@@ -33,38 +31,43 @@ function estadoStyle(e: string) {
     fontSize: "12px",
     fontWeight: 600,
   };
-
   return e === "Activo"
     ? { ...baseStyle, backgroundColor: "#dcfce7", color: "#15803d" }
     : { ...baseStyle, backgroundColor: "#fee2e2", color: "#b91c1c" };
 }
 
 export default function ProductosPage() {
-const [productos, setProductos] = useState<Producto[]>([]);
-const [loading, setLoading] = useState(true);
-const [busqueda, setBusqueda] = useState("");
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busqueda, setBusqueda] = useState("");
 
-const cargarProductos = async () => {
-  try {
-    const data = await api.getProductos();
-
-    console.log("Productos:", data);
-
-    setProductos(Array.isArray(data) ? data : []);
-  } catch (error) {
-    console.error("Error cargando productos:", error);
-  } finally {
-    setLoading(false);
-  }
-};
-
-useEffect(() => {
-  const cargar = async () => {
-    await cargarProductos();
+  const cargarProductos = async () => {
+    try {
+      const response = await api.getProductos();
+      console.log("Productos:", response);
+      
+      // ARREGLO: Extraer de 'response.data' si viene paginado
+      if (response && Array.isArray(response.data)) {
+        setProductos(response.data);
+      } else if (Array.isArray(response)) {
+        setProductos(response);
+      } else {
+        setProductos([]);
+      }
+    } catch (error) {
+      console.error("Error cargando productos:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  cargar();
-}, []);
+  useEffect(() => {
+    const cargar = async () => {
+      await cargarProductos();
+    };
+    cargar();
+  }, []);
+
   const productosFiltrados = productos.filter((producto) =>
     producto?.name?.toLowerCase().includes(busqueda.toLowerCase())
   );
@@ -72,7 +75,6 @@ useEffect(() => {
   return (
     <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "#f9fafb" }}>
       <Sidebar active="Productos" role="cliente" />
-
       <main style={{ flex: 1, padding: "24px" }}>
         <input
           type="text"
@@ -122,7 +124,6 @@ useEffect(() => {
                     ))}
                   </tr>
                 </thead>
-
                 <tbody>
                   {productosFiltrados.length === 0 ? (
                     <tr>
@@ -143,7 +144,6 @@ useEffect(() => {
                           {p.precio !== undefined ? `$${p.precio}` : "-"}
                         </td>
                         <td style={{ padding: "12px 8px 12px 0" }}>
-                          {/* 5. Renderizado dinámico usando los datos reales del producto */}
                           <span style={stockStyle(p.stock ?? 0)}>
                             {p.stock ?? 0} pzs
                           </span>
@@ -158,7 +158,6 @@ useEffect(() => {
                   )}
                 </tbody>
               </table>
-
               <div
                 style={{
                   display: "flex",
@@ -171,13 +170,12 @@ useEffect(() => {
                 <span style={{ fontSize: "13px", color: "#6b7280" }}>
                   {productosFiltrados.length} resultados
                 </span>
-
                 <div style={{ display: "flex", gap: "8px" }}>
                   <button style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "4px 12px", fontSize: "13px", cursor: "pointer", backgroundColor: "#fff", color: "#374151" }}>
-                    ← Ant
+                      Ant.
                   </button>
                   <button style={{ border: "1px solid #d1d5db", borderRadius: "6px", padding: "4px 12px", fontSize: "13px", cursor: "pointer", backgroundColor: "#fff", color: "#374151" }}>
-                    Sig →
+                    Sig.
                   </button>
                 </div>
               </div>
